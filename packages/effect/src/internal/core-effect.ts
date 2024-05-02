@@ -32,6 +32,7 @@ import { clockTag } from "./clock.js"
 import * as core from "./core.js"
 import * as defaultServices from "./defaultServices.js"
 import * as doNotation from "./doNotation.js"
+import * as fiberRef from "./fiberRef.js"
 import * as fiberRefsPatch from "./fiberRefs/patch.js"
 import type { FiberRuntime } from "./fiberRuntime.js"
 import * as metricLabel from "./metric/label.js"
@@ -56,7 +57,7 @@ export const annotateLogs = dual<
     const args = arguments
     return core.fiberRefLocallyWith(
       args[0] as Effect.Effect<A, E, R>,
-      core.currentLogAnnotations,
+      fiberRef.currentLogAnnotations,
       typeof args[1] === "string"
         ? HashMap.set(args[1], args[2])
         : (annotations) =>
@@ -927,14 +928,14 @@ export const withLogSpan = dual<
   core.flatMap(Clock.currentTimeMillis, (now) =>
     core.fiberRefLocallyWith(
       effect,
-      core.currentLogSpan,
+      fiberRef.currentLogSpan,
       List.prepend(LogSpan.make(label, now))
     )))
 
 /* @internal */
 export const logAnnotations: Effect.Effect<HashMap.HashMap<string, unknown>> = core
   .fiberRefGet(
-    core.currentLogAnnotations
+    fiberRef.currentLogAnnotations
   )
 
 /* @internal */
@@ -1401,7 +1402,7 @@ export const labelMetrics = dual<
   <A, E, R>(self: Effect.Effect<A, E, R>, labels: Iterable<MetricLabel.MetricLabel>) => Effect.Effect<A, E, R>
 >(
   2,
-  (self, labels) => core.fiberRefLocallyWith(self, core.currentMetricLabels, (old) => Arr.union(old, labels))
+  (self, labels) => core.fiberRefLocallyWith(self, fiberRef.currentMetricLabels, (old) => Arr.union(old, labels))
 )
 
 /* @internal */
@@ -1950,7 +1951,7 @@ export const annotateSpans = dual<
     const args = arguments
     return core.fiberRefLocallyWith(
       args[0] as Effect.Effect<A, E, R>,
-      core.currentTracerSpanAnnotations,
+      fiberRef.currentTracerSpanAnnotations,
       typeof args[1] === "string"
         ? HashMap.set(args[1], args[2])
         : (annotations) =>
@@ -1994,7 +1995,7 @@ export const linkSpans = dual<
   (self, span, attributes) =>
     core.fiberRefLocallyWith(
       self,
-      core.currentTracerSpanLinks,
+      fiberRef.currentTracerSpanLinks,
       Chunk.append(
         {
           _tag: "SpanLink",
@@ -2013,21 +2014,21 @@ export const unsafeMakeSpan = <XA, XE>(
   name: string,
   options?: Tracer.SpanOptions
 ) => {
-  const enabled = fiber.getFiberRef(core.currentTracerEnabled)
+  const enabled = fiber.getFiberRef(fiberRef.currentTracerEnabled)
   if (enabled === false) {
     return core.noopSpan(name)
   }
 
-  const context = fiber.getFiberRef(core.currentContext)
+  const context = fiber.getFiberRef(fiberRef.currentContext)
   const services = fiber.getFiberRef(defaultServices.currentServices)
 
   const tracer = Context.get(services, internalTracer.tracerTag)
   const clock = Context.get(services, Clock.Clock)
-  const timingEnabled = fiber.getFiberRef(core.currentTracerTimingEnabled)
+  const timingEnabled = fiber.getFiberRef(fiberRef.currentTracerTimingEnabled)
 
   const fiberRefs = fiber.getFiberRefs()
-  const annotationsFromEnv = FiberRefs.get(fiberRefs, core.currentTracerSpanAnnotations)
-  const linksFromEnv = FiberRefs.get(fiberRefs, core.currentTracerSpanLinks)
+  const annotationsFromEnv = FiberRefs.get(fiberRefs, fiberRef.currentTracerSpanAnnotations)
+  const linksFromEnv = FiberRefs.get(fiberRefs, fiberRef.currentTracerSpanLinks)
 
   const parent = options?.parent
     ? Option.some(options.parent)
@@ -2071,11 +2072,11 @@ export const makeSpan = (
 
 /* @internal */
 export const spanAnnotations: Effect.Effect<HashMap.HashMap<string, unknown>> = core
-  .fiberRefGet(core.currentTracerSpanAnnotations)
+  .fiberRefGet(fiberRef.currentTracerSpanAnnotations)
 
 /* @internal */
 export const spanLinks: Effect.Effect<Chunk.Chunk<Tracer.SpanLink>> = core
-  .fiberRefGet(core.currentTracerSpanLinks)
+  .fiberRefGet(fiberRef.currentTracerSpanLinks)
 
 /** @internal */
 export const useSpan: {
@@ -2097,7 +2098,7 @@ export const useSpan: {
 
   return core.withFiberRuntime<A, E, R>((fiber) => {
     const span = unsafeMakeSpan(fiber, name, options)
-    const timingEnabled = fiber.getFiberRef(core.currentTracerTimingEnabled)
+    const timingEnabled = fiber.getFiberRef(fiberRef.currentTracerTimingEnabled)
     const clock = Context.get(fiber.getFiberRef(defaultServices.currentServices), clockTag)
     return core.onExit(evaluate(span), (exit) =>
       core.sync(() => {
